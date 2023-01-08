@@ -1,14 +1,25 @@
 import SwiftUI
 import Foundation
+import Combine
 
-class QuizViewModelTest: ObservableObject {
+
+class QuestionApi: ObservableObject {
     @Published var questions: [Question] = []
+
+    func updateQuestions(questions: [Question]) {
+            let mainQueue = DispatchQueue.main
+            let questionsPublisher = Just(questions)
+                .receive(on: mainQueue)
+                .assign(to: \.questions, on: self)
+    }
     
-    func fetchQuestions(completion: @escaping (Result<[Question], Error>) -> ()) {
-        let limit = "5"
-        let urlString = "https://quizapi.io/api/v1/questions?apiKey=kBDMEYm0dPlFXz9Wpw4xGtEruKHYEjammCMrse9O&limit="
-        
-        let url = URL(string: urlString + limit)!
+    
+    //api deel, check: https://www.youtube.com/watch?v=sqo844saoC4&t=516s
+    func fetchQuestions(category: String, limit: Int ,completion: @escaping (Result<[Question], Error>) -> ()) {
+        let urlString = "https://quizapi.io/api/v1/questions?apiKey=kBDMEYm0dPlFXz9Wpw4xGtEruKHYEjammCMrse9O"
+        print(category)
+        print(limit)
+        let url = URL(string: urlString + "&limit=\(limit)" + "&category=\(category)")!
         
         let task = URLSession.shared.dataTask(with: url) { data, response, error in
             if let error = error {
@@ -26,7 +37,6 @@ class QuizViewModelTest: ObservableObject {
                 completion(.failure(APIError.noData))
                 return
             }
-            // Here, you can parse the data returned from the server and pass the resulting questions to the completion handler
             let questions = parseQuestions(data: data)
             completion(.success(questions))
         }
@@ -40,24 +50,9 @@ enum APIError: Error {
     case noData
 }
 
-struct Question {
-    let id: Int
-    let question: String
-    let description: String?
-    let answers: [String: String?]
-    let multipleCorrectAnswers: Bool
-    let correctAnswers: [String: Bool]
-    let correctAnswer: String?
-    let explanation: String?
-    let tip: String?
-//    let tags: [[String: String]]
-    let category: String
-    let difficulty: String
-}
 
 func parseQuestions(data: Data) -> [Question] {
     do {
-        // Convert the data to a dictionary
         let json = try JSONSerialization.jsonObject(with: data, options: []) as! [[String: Any]]
 
         var questions: [Question] = []
@@ -69,12 +64,10 @@ func parseQuestions(data: Data) -> [Question] {
             let correctAnswer = item["correct_answer"] as? String
             let explanation = item["explanation"] as? String
             let tip = item["tip"] as? String
-//            let tags = item["tags"] as! [[String: String]]
             let category = item["category"] as! String
             let difficulty = item["difficulty"] as! String
             
             //multipleCorrectAnswers van string naar bool
-//            let multipleCorrectAnswersString = item["multiple_correct_answers"] as? String ?? "false"
             let multipleCorrectAnswers = stringToBool(val: item["multiple_correct_answers"] as! String)
             
             //answers fixen
@@ -90,7 +83,7 @@ func parseQuestions(data: Data) -> [Question] {
             for (key, value) in correctAnswersObject {
                 correctAnswers[key] = stringToBool(val: value as! String)
             }
-
+            
             let questionItem = Question(
                 id: id,
                 question: question,
@@ -101,7 +94,6 @@ func parseQuestions(data: Data) -> [Question] {
                 correctAnswer: correctAnswer,
                 explanation: explanation,
                 tip: tip,
-//                tags: tags,
                 category: category,
                 difficulty: difficulty
             )
@@ -110,7 +102,6 @@ func parseQuestions(data: Data) -> [Question] {
 
         return questions
     } catch {
-        // If there is an error parsing the data, return an empty array
         return []
     }
 }
